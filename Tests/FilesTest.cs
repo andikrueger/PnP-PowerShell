@@ -47,6 +47,7 @@ namespace SharePointPnP.PowerShell.Tests
         private const string TargetFileName = "Testfile.txt";
         private const string TargetFileContents = "Some random file contents";
         private const string TargetCopyFolderName = "CopyDestination";
+        private const string EmptyFolderName = "EmptyFolder";
         private const string TargetFileNameWithAmpersand = "Test & file.txt";
 
         [TestInitialize]
@@ -90,6 +91,8 @@ namespace SharePointPnP.PowerShell.Tests
                     site1Ctx.ExecuteQueryRetry();
 
                     folder.EnsureFolder(TargetCopyFolderName);
+
+                    folder.EnsureFolder(EmptyFolderName);
 
                 }
                 OfficeDevPnP.Core.Sites.SiteCollection.CreateAsync(ctx, new OfficeDevPnP.Core.Sites.CommunicationSiteCollectionCreationInformation()
@@ -288,6 +291,62 @@ namespace SharePointPnP.PowerShell.Tests
                 }
             }
         }
+
+        [TestMethod]
+        public void CopyFile_EmptyFolder_Test()
+        {
+            using (var scope = new PSTestScope(_site1Url, true))
+            {
+                var sourceUrl = $"{Site1RelativeFolderUrl}/{EmptyFolderName}";
+                var destinationUrl = $"{Site1RelativeFolderUrl}/{TargetCopyFolderName}/{EmptyFolderName}";
+
+                var results = scope.ExecuteCommand("Copy-PnPFile",
+                    new CommandParameter("SourceUrl", sourceUrl),
+                    new CommandParameter("TargetUrl", destinationUrl),
+                    new CommandParameter("Force"));
+
+                using (var ctx = TestCommon.CreateClientContext(_site1Url))
+                {
+                    Folder initialFolder = ctx.Web.GetFolderByServerRelativePath(ResourcePath.FromDecodedUrl(destinationUrl));
+                    initialFolder.EnsureProperties(f => f.Name, f => f.Exists);
+                    ctx.Load(initialFolder);
+                    ctx.ExecuteQuery();
+                    if (!initialFolder.Exists)
+                    {
+                        Assert.Fail("Copied folder cannot be found");
+                    }
+                }
+            }
+        }
+
+        [TestMethod]
+        public void CopyFile_EmptyFolderBetweenSiteCollections_Test()
+        {
+            using (var scope = new PSTestScope(_site1Url, true))
+            {
+                var sourceUrl = $"{Site1RelativeFolderUrl}/{EmptyFolderName}";
+                var destinationUrl = $"{Site2RelativeFolderUrl}/{EmptyFolderName}";
+
+                var results = scope.ExecuteCommand("Copy-PnPFile",
+                    new CommandParameter("SourceUrl", sourceUrl),
+                    new CommandParameter("TargetUrl", destinationUrl),
+                    new CommandParameter("Force"));
+
+                using (var ctx = TestCommon.CreateClientContext(_site2Url))
+                {
+                    Folder initialFolder = ctx.Web.GetFolderByServerRelativePath(ResourcePath.FromDecodedUrl(destinationUrl));
+                    initialFolder.EnsureProperties(f => f.Name, f => f.Exists);
+                    ctx.Load(initialFolder);
+                    ctx.ExecuteQuery();
+                    if (!initialFolder.Exists)
+                    {
+                        Assert.Fail("Copied folder cannot be found");
+                    }
+                }
+            }
+        }
+
+
     }
 }
 #endif
