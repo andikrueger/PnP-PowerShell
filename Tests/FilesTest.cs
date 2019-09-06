@@ -44,6 +44,8 @@ namespace SharePointPnP.PowerShell.Tests
             }
         }
 
+        private const string SourceFolderWithFolders = "SourceFolderWithFoldersAndFilesAndEmptyFolder";
+        private const string SourceFolderName = "SourceFolder";
         private const string TargetFileName = "Testfile.txt";
         private const string TargetFileContents = "Some random file contents";
         private const string TargetCopyFolderName = "CopyDestination";
@@ -88,12 +90,29 @@ namespace SharePointPnP.PowerShell.Tests
                     fileToUpload = folder.Files.Add(fci);
                     site1Ctx.Load(fileToUpload);
 
-                    site1Ctx.ExecuteQueryRetry();
-
                     folder.EnsureFolder(TargetCopyFolderName);
 
+                    // Prereq for CopyFile_EmptyFolderBetweenSiteCollections_Test
                     folder.EnsureFolder(EmptyFolderName);
 
+                    // Prereq for CopyFile_FolderWithSkipSourceFolderNameBetweenSiteCollections_Test
+                    var sourceFolder = folder.EnsureFolder(SourceFolderName);
+                    fileToUpload = sourceFolder.Files.Add(fci);
+                    site1Ctx.Load(fileToUpload);
+
+
+                    // Prereq for CopyFile_FolderWithFoldersAndEmptyFolderBetweenSiteCollections_Test
+                    var folderHirachyFolder0 = folder.EnsureFolder(SourceFolderWithFolders);
+                    var folderHirachyFolder1 = folderHirachyFolder0.EnsureFolder(TargetCopyFolderName);
+
+                    var folderHirachyFile0 = folderHirachyFolder0.Files.Add(fci);
+                    var folderHirachyFile1 = folderHirachyFolder1.Files.Add(fci);
+                    site1Ctx.Load(folderHirachyFile0);
+                    site1Ctx.Load(folderHirachyFile1);
+                    
+                    folderHirachyFolder1.EnsureFolder(EmptyFolderName);
+
+                    site1Ctx.ExecuteQueryRetry();
                 }
                 OfficeDevPnP.Core.Sites.SiteCollection.CreateAsync(ctx, new OfficeDevPnP.Core.Sites.CommunicationSiteCollectionCreationInformation()
                 {
@@ -346,7 +365,53 @@ namespace SharePointPnP.PowerShell.Tests
             }
         }
 
+        [TestMethod]
+        public void CopyFile_FolderWithSkipSourceFolderNameBetweenSiteCollections_Test()
+        {
+            using(var scope = new PSTestScope(_site1Url, true))
+            {
+                var sourceUrl = $"{Site1RelativeFolderUrl}/{SourceFolderName}";
+                var destinationUrl = $"{Site2RelativeFolderUrl}";
 
+                var results = scope.ExecuteCommand("Copy-PnPFile",
+                    new CommandParameter("SourceUrl", sourceUrl),
+                    new CommandParameter("TargetUrl", destinationUrl),
+                    new CommandParameter(name: "SkipSourceFolderName"),
+                    new CommandParameter("Force"));
+
+                using (var ctx = TestCommon.CreateClientContext(_site2Url))
+                { 
+                    Folder initialFolder = ctx.Web.GetFolderByServerRelativePath(ResourcePath.FromDecodedUrl(destinationUrl));
+                    initialFolder.EnsureProperties(f => f.Name, f => f.Exists, f=>f.Files);
+                    ctx.Load(initialFolder);
+                    ctx.ExecuteQuery();
+                    Assert.AreEqual(1, initialFolder.Files.Count);
+                }
+            }
+        }
+
+        [TestMethod]
+        public void CopyFile_FolderWithFoldersAndEmptyFolderBetweenSiteCollections_Test()
+        {
+            using (var scope = new PSTestScope(_site1Url, true))
+            {
+                var sourceUrl = $"{Site1RelativeFolderUrl}/{SourceFolderWithFolders}";
+                var destinationUrl = $"{Site2RelativeFolderUrl}";
+
+                var results = scope.ExecuteCommand("Copy-PnPFile",
+                    new CommandParameter("SourceUrl", sourceUrl),
+                    new CommandParameter("TargetUrl", destinationUrl),
+                    new CommandParameter("Force"));
+
+                using (var ctx = TestCommon.CreateClientContext(_site2Url))
+                {
+                    List list = ctx.Web.GetListUsingPath(ResourcePath.FromDecodedUrl(destinationUrl));
+                    ctx.Load(list);
+                    ctx.ExecuteQuery();
+                    Assert.AreEqual(5, list.ItemCount);
+                }
+            }
+        }
     }
 }
 #endif
