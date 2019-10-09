@@ -51,6 +51,7 @@ namespace SharePointPnP.PowerShell.Tests
         private const string TargetCopyFolderName = "CopyDestination";
         private const string EmptyFolderName = "EmptyFolder";
         private const string TargetFileNameWithAmpersand = "Test & file.txt";
+        private const string TargetFileNameWithHashtag = "Test & file.txt";
 
         [TestInitialize]
         public void Initialize()
@@ -86,6 +87,11 @@ namespace SharePointPnP.PowerShell.Tests
                     site1Ctx.Load(fileToUpload);
 
                     fci.Url = TargetFileNameWithAmpersand;
+                    fci.Overwrite = true;
+                    fileToUpload = folder.Files.Add(fci);
+                    site1Ctx.Load(fileToUpload);
+
+                    fci.Url = TargetFileNameWithHashtag;
                     fci.Overwrite = true;
                     fileToUpload = folder.Files.Add(fci);
                     site1Ctx.Load(fileToUpload);
@@ -258,6 +264,33 @@ namespace SharePointPnP.PowerShell.Tests
         }
 
         [TestMethod]
+        public void CopyFile_WithHashtag_Test()
+        {
+            using (var scope = new PSTestScope(_site1Url, true))
+            {
+                var sourceUrl = $"{Site1RelativeFolderUrl}/{TargetFileNameWithHashtag}";
+                var destinationUrl = $"{Site1RelativeFolderUrl}/{TargetCopyFolderName}";
+                var destinationFileUrl = $"{destinationUrl}/{TargetFileNameWithHashtag}";
+
+                var results = scope.ExecuteCommand("Copy-PnPFile",
+                    new CommandParameter("SourceUrl", sourceUrl),
+                    new CommandParameter("TargetUrl", destinationUrl),
+                    new CommandParameter("Force"));
+
+                using (var ctx = TestCommon.CreateClientContext(_site1Url))
+                {
+                    File initialFile = ctx.Web.GetFileByServerRelativeUrl(destinationFileUrl);
+                    ctx.Load(initialFile);
+                    ctx.ExecuteQueryRetry();
+                    if (!initialFile.Exists)
+                    {
+                        Assert.Fail("Copied file cannot be found");
+                    }
+                }
+            }
+        }
+
+        [TestMethod]
         public void CopyFile_BetweenSiteCollections_Test()
         {
             using (var scope = new PSTestScope(_site1Url, true))
@@ -292,6 +325,33 @@ namespace SharePointPnP.PowerShell.Tests
                 var sourceUrl = $"{Site1RelativeFolderUrl}/{TargetFileNameWithAmpersand}";
                 var destinationFolderUrl = $"{Site2RelativeFolderUrl}";
                 string destinationFileUrl = $"{destinationFolderUrl}/{TargetFileNameWithAmpersand}";
+
+                var results = scope.ExecuteCommand("Copy-PnPFile",
+                    new CommandParameter("SourceUrl", sourceUrl),
+                    new CommandParameter("TargetUrl", destinationFolderUrl),
+                    new CommandParameter("Force"));
+
+                using (var ctx = TestCommon.CreateClientContext(_site2Url))
+                {
+                    File initialFile = ctx.Web.GetFileByServerRelativeUrl(destinationFileUrl);
+                    ctx.Load(initialFile);
+                    ctx.ExecuteQuery();
+                    if (!initialFile.Exists)
+                    {
+                        Assert.Fail("Copied file cannot be found");
+                    }
+                }
+            }
+        }
+
+        [TestMethod]
+        public void CopyFile_BetweenSiteCollectionsWithHashtag_Test()
+        {
+            using (var scope = new PSTestScope(_site1Url, true))
+            {
+                var sourceUrl = $"{Site1RelativeFolderUrl}/{TargetFileNameWithHashtag}";
+                var destinationFolderUrl = $"{Site2RelativeFolderUrl}";
+                string destinationFileUrl = $"{destinationFolderUrl}/{TargetFileNameWithHashtag}";
 
                 var results = scope.ExecuteCommand("Copy-PnPFile",
                     new CommandParameter("SourceUrl", sourceUrl),
